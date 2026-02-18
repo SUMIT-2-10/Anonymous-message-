@@ -5,17 +5,17 @@ type DBConnectOptions = {
     isConnected?: number;
 }
 
-const DBconnect: DBConnectOptions = {}
+const dbConnect: DBConnectOptions = {}
 
 async function connectToDB(): Promise<void> {
-    if (DBconnect.isConnected) {
+    if (dbConnect.isConnected) {
         console.log("Already connected to database");
         return;
     }
     try {
         const db = await mongoose.connect(process.env.MONGODB_URI || "", {})
 
-        DBconnect.isConnected = db.connections[0].readyState;
+        dbConnect.isConnected = db.connections[0].readyState;
         console.log("db.connections[0].readyState", db.connections);
         console.log("db", db);
         console.log("Connected to database");
