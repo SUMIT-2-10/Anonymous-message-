@@ -1,22 +1,55 @@
+// =============================================
+// File: src/app/(auth)/sign-up/page.tsx
+// Purpose: Sign-up page — allows new users to register
+// =============================================
+//
+// RENDERING FLOW:
+// Client → API → DB → Response → UI Update
+//
+// 1. User visits /sign-up (if already logged in, middleware redirects to /dashboard)
+// 2. User fills in username, email, and password
+// 3. On submit, a POST request is sent to /api/sign-up with the form data
+// 4. The API route:
+//    a. Checks username uniqueness (only verified users count)
+//    b. Checks email uniqueness
+//    c. Hashes password with bcrypt
+//    d. Generates 6-digit OTP
+//    e. Saves user to MongoDB
+//    f. Sends verification email via Resend
+// 5. If successful → redirect to /verify/{username} for OTP entry
+// 6. If failed → display error message on the form
+//
+// CLIENT COMPONENT ('use client'):
+// - Uses React hooks (useState, useRouter) for form state management
+// - Uses fetch() for API communication
+// - Needs interactivity (form submission, error display, loading states)
+//
+// NAVIGATION:
+// - On success: router.replace(`/verify/${username}`) takes user to verification page
+// - Link to /sign-in for users who already have an account
+// =============================================
+
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function SignUpPage() {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  // Form state management
+  const [username, setUsername] = useState('');    // Unique username
+  const [email, setEmail] = useState('');          // Email for verification
+  const [password, setPassword] = useState('');    // Password (min 8 chars)
+  const [error, setError] = useState('');           // Error message from API
+  const [loading, setLoading] = useState(false);    // Loading state for button
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    e.preventDefault();    // Prevent default form submission
+    setError('');           // Clear previous errors
+    setLoading(true);       // Show loading state
 
     try {
+      // Send registration data to the sign-up API endpoint
       const res = await fetch('/api/sign-up', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,13 +59,18 @@ export default function SignUpPage() {
       const data = await res.json();
 
       if (!data.success) {
+        // Registration failed → display the error message from API
         setError(data.message);
       } else {
+        // Registration successful → redirect to OTP verification page
+        // The username is passed in the URL so the verify page knows who to verify
         router.replace(`/verify/${username}`);
       }
     } catch {
+      // Network or unexpected error
       setError('Something went wrong');
     } finally {
+      // Always reset loading state, whether success or failure
       setLoading(false);
     }
   };

@@ -1,3 +1,29 @@
+// =============================================
+// File: src/app/(auth)/sign-in/page.tsx
+// Purpose: Sign-in page — allows users to log in with email/username + password
+// =============================================
+//
+// RENDERING FLOW:
+// 1. User visits /sign-in (if already logged in, middleware redirects to /dashboard)
+// 2. User enters email/username (identifier) and password
+// 3. On submit, signIn('credentials', { identifier, password }) is called
+//    → This triggers NextAuth's authorize() function in option.ts
+//    → authorize() checks the DB for the user, verifies password with bcrypt
+// 4. If successful → JWT is created → user is redirected to /dashboard
+// 5. If failed → error message is displayed on the form
+//
+// CLIENT COMPONENT ('use client'):
+// - Uses React hooks (useState, useRouter) for form state management
+// - signIn() from next-auth/react is a client-side function
+// - Needs interactivity (form submission, error display)
+//
+// REDIRECT BEHAVIOR:
+// - redirect: false prevents NextAuth from doing a full-page redirect on error
+// - Instead, we get the error in `result.error` and display it inline
+// - On success, router.replace('/dashboard') does a client-side navigation
+//   (replace instead of push so user can't go "back" to sign-in)
+// =============================================
+
 'use client';
 
 import { signIn } from 'next-auth/react';
@@ -5,28 +31,34 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 export default function SignInPage() {
-  const [identifier, setIdentifier] = useState('');
+  // Form state management
+  const [identifier, setIdentifier] = useState('');  // Email or username
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');             // Error message from auth
+  const [loading, setLoading] = useState(false);      // Loading state for button
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    e.preventDefault();    // Prevent default form submission (page reload)
+    setError('');           // Clear any previous error
+    setLoading(true);       // Show loading state on button
 
+    // Call NextAuth's signIn() with the 'credentials' provider
+    // redirect: false → handle the response ourselves instead of auto-redirecting
     const result = await signIn('credentials', {
       redirect: false,
-      identifier,
-      password,
+      identifier,     // Sent to authorize() as credentials.identifier
+      password,        // Sent to authorize() as credentials.password
     });
 
     setLoading(false);
 
     if (result?.error) {
+      // Authentication failed → display the error message
       setError(result.error);
     } else {
+      // Authentication successful → navigate to dashboard
+      // replace() instead of push() so user can't go "back" to sign-in
       router.replace('/dashboard');
     }
   };
