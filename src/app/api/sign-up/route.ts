@@ -1,12 +1,12 @@
-import dbconnect from "@/lib/dbconnect";
 import UserModel from "@/model/User";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs"
+import connectToDB from "@/lib/dbConnect";
 
 import { sendVerificationEmail } from "@/helpers/sendVerficationEmail";
 import { success } from "zod";
 
 export async function POST(request: Request) {
-    await dbconnect();
+    await connectToDB();
     try {
         const { username, email, password } = await request.json();
         const existingUserVerfiedByUsername = await UserModel.findOne({ username, isverified: true})
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
         const existingUserByEmail = await UserModel.findOne({ email})
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
         if (existingUserByEmail) {
-            if (existingUserByEmail.isverified){
+            if (existingUserByEmail.isVerified){
                 return Response.json({
                     success: false,
                     message: "User aleady exist wth this email"
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
                 existingUserByEmail.verifycode = verificationCode;
                 const expiryDate = new Date();
                 expiryDate.setHours(expiryDate.getHours() + 1);
-                existingUserByEmail.veryfycodeExpire = expiryDate;
+                existingUserByEmail.verifycodeExpire = expiryDate;
 
                 await existingUserByEmail.save();
             }
@@ -54,9 +54,9 @@ export async function POST(request: Request) {
                 email,
                 password: hashedPassword,
                 verificationCode,
-                veryfycodeExpire: expiryDate,
-                isverified: false,
-                isAccpetingMessages: false,
+                verifycodeExpire: expiryDate,
+                isVerified: false,
+                isAcceptingMessages: false,
                 messages: []
             });
 
