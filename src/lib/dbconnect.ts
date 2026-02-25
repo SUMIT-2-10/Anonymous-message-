@@ -66,8 +66,8 @@ async function connectToDB(): Promise<void> {
         // CACHE: Store the connection readyState (1 = connected)
         // db.connections[0] is the default connection Mongoose creates
         dbConnect.isConnected = db.connections[0].readyState;
-        console.log("db.connections[0].readyState", db.connections);
-        console.log("db", db);
+        // console.log("db.connections[0].readyState", db.connections);
+        // console.log("db", db);
         console.log("Connected to database");
     }catch (error) {
         // FATAL: If DB connection fails, the app cannot function

@@ -107,7 +107,7 @@ export async function POST(request: Request) {
                 username,
                 email,
                 password: hashedPassword,
-                verificationCode,
+                verifycode: verificationCode,
                 verifycodeExpire: expiryDate,
                 isVerified: false,           // Must verify email before logging in
                 isAcceptingMessages: false,   // Default: not accepting messages
