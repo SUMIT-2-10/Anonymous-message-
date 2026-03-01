@@ -1,5 +1,5 @@
 // =============================================
-// Route: /api/check-userrname-unique
+// Route: /api/check-username-unique
 // Method: GET
 // Purpose: Real-time username availability check
 // =============================================
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
   try {
     // Step 2: Extract the username from URL query parameters
-    // e.g., /api/check-userrname-unique?username=johndoe
+    // e.g., /api/check-username-unique?username=johndoe
     const { searchParams } = new URL(request.url);
     const queryParams = {
       username: searchParams.get('username'),

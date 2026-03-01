@@ -1,121 +1,107 @@
-// =============================================
-// File: src/app/(auth)/sign-in/page.tsx
-// Purpose: Sign-in page — allows users to log in with email/username + password
-// =============================================
-//
-// RENDERING FLOW:
-// 1. User visits /sign-in (if already logged in, middleware redirects to /dashboard)
-// 2. User enters email/username (identifier) and password
-// 3. On submit, signIn('credentials', { identifier, password }) is called
-//    → This triggers NextAuth's authorize() function in option.ts
-//    → authorize() checks the DB for the user, verifies password with bcrypt
-// 4. If successful → JWT is created → user is redirected to /dashboard
-// 5. If failed → error message is displayed on the form
-//
-// CLIENT COMPONENT ('use client'):
-// - Uses React hooks (useState, useRouter) for form state management
-// - signIn() from next-auth/react is a client-side function
-// - Needs interactivity (form submission, error display)
-//
-// REDIRECT BEHAVIOR:
-// - redirect: false prevents NextAuth from doing a full-page redirect on error
-// - Instead, we get the error in `result.error` and display it inline
-// - On success, router.replace('/dashboard') does a client-side navigation
-//   (replace instead of push so user can't go "back" to sign-in)
-// =============================================
-
 'use client';
 
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
 import { signIn } from 'next-auth/react';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useToast } from '@/components/ui/use-toast';
+import { signInSchema } from '@/Schemas/signinSchema';
 
-export default function SignInPage() {
-  // Form state management
-  const [identifier, setIdentifier] = useState('');  // Email or username
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');             // Error message from auth
-  const [loading, setLoading] = useState(false);      // Loading state for button
+export default function SignInForm() {
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();    // Prevent default form submission (page reload)
-    setError('');           // Clear any previous error
-    setLoading(true);       // Show loading state on button
+  const form = useForm<z.infer<typeof signInSchema>>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: {
+      identifier: '',
+      password: '',
+    },
+  });
 
-    // Call NextAuth's signIn() with the 'credentials' provider
-    // redirect: false → handle the response ourselves instead of auto-redirecting
+  const { toast } = useToast();
+  const onSubmit = async (data: z.infer<typeof signInSchema>) => {
     const result = await signIn('credentials', {
       redirect: false,
-      identifier,     // Sent to authorize() as credentials.identifier
-      password,        // Sent to authorize() as credentials.password
+      identifier: data.identifier,
+      password: data.password,
     });
 
-    setLoading(false);
-
     if (result?.error) {
-      // Authentication failed → display the error message
-      setError(result.error);
-    } else {
-      // Authentication successful → navigate to dashboard
-      // replace() instead of push() so user can't go "back" to sign-in
+      if (result.error === 'CredentialsSignin') {
+        toast({
+          title: 'Login Failed',
+          description: 'Incorrect username or password',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    }
+
+    if (result?.url) {
       router.replace('/dashboard');
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
-        <h1 className="mb-6 text-center text-2xl font-bold">Sign In</h1>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Email or Username
-            </label>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="email@example.com or username"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+    <div className="flex justify-center items-center min-h-screen bg-gray-800">
+      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+        <div className="text-center">
+          <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-6">
+            Welcome Back to True Feedback
+          </h1>
+          <p className="mb-4">Sign in to continue your secret conversations</p>
+        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              name="identifier"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email/Username</FormLabel>
+                  <Input {...field} />
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            <FormField
+              name="password"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <Input type="password" {...field} />
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-500">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-blue-600 py-2 text-white transition hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Don&apos;t have an account?{' '}
-          <a href="/sign-up" className="text-blue-600 hover:underline">
-            Sign Up
-          </a>
-        </p>
+            <Button className='w-full' type="submit">Sign In</Button>
+          </form>
+        </Form>
+        <div className="text-center mt-4">
+          <p>
+            Not a member yet?{' '}
+            <Link href="/sign-up" className="text-blue-600 hover:text-blue-800">
+              Sign up
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

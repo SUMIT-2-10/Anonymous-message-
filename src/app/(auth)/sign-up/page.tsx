@@ -1,148 +1,224 @@
-// =============================================
-// File: src/app/(auth)/sign-up/page.tsx
-// Purpose: Sign-up page — allows new users to register
-// =============================================
-//
-// RENDERING FLOW:
-// Client → API → DB → Response → UI Update
-//
-// 1. User visits /sign-up (if already logged in, middleware redirects to /dashboard)
-// 2. User fills in username, email, and password
-// 3. On submit, a POST request is sent to /api/sign-up with the form data
-// 4. The API route:
-//    a. Checks username uniqueness (only verified users count)
-//    b. Checks email uniqueness
-//    c. Hashes password with bcrypt
-//    d. Generates 6-digit OTP
-//    e. Saves user to MongoDB
-//    f. Sends verification email via Resend
-// 5. If successful → redirect to /verify/{username} for OTP entry
-// 6. If failed → display error message on the form
-//
-// CLIENT COMPONENT ('use client'):
-// - Uses React hooks (useState, useRouter) for form state management
-// - Uses fetch() for API communication
-// - Needs interactivity (form submission, error display, loading states)
-//
-// NAVIGATION:
-// - On success: router.replace(`/verify/${username}`) takes user to verification page
-// - Link to /sign-in for users who already have an account
-// =============================================
-
 'use client';
 
-import { useState } from 'react';
+import { ApiResponse } from '@/types/ApiResponse';
+import { zodResolver } from '@hookform/resolvers/zod';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useDebounceCallback, useDebounceValue } from 'usehooks-ts';
+import * as z from 'zod';
+
+import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/use-toast';
+import axios, { AxiosError } from 'axios';
+import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { signUpSchema } from '@/Schemas/signUpSchema';
 
-export default function SignUpPage() {
-  // Form state management
-  const [username, setUsername] = useState('');    // Unique username
-  const [email, setEmail] = useState('');          // Email for verification
-  const [password, setPassword] = useState('');    // Password (min 8 chars)
-  const [error, setError] = useState('');           // Error message from API
-  const [loading, setLoading] = useState(false);    // Loading state for button
+export default function SignUpForm() {
+  const [username, setUsername] = useState('');
+  const [usernameMessage, setUsernameMessage] = useState('');
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const debouncedUsername = useDebounceCallback(setUsername, 300);
+
   const router = useRouter();
+  const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();    // Prevent default form submission
-    setError('');           // Clear previous errors
-    setLoading(true);       // Show loading state
+  const form = useForm<z.infer<typeof signUpSchema>>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      username: '',
+      email: '',
+      password: '',
+    },
+  });
 
+  useEffect(() => {
+    const checkUsernameUnique = async () => {
+      if (username) {
+        setIsCheckingUsername(true);
+        setUsernameMessage(''); // Reset message
+        try {
+          const response = await axios.get<ApiResponse>(
+            `/api/check-username-unique?username=${username}`
+          );
+          setUsernameMessage(response.data.message);
+        } catch (error) {
+          const axiosError = error as AxiosError<ApiResponse>;
+          setUsernameMessage(
+            axiosError.response?.data.message ?? 'Error checking username'
+          );
+        } finally {
+          setIsCheckingUsername(false);
+        }
+      }
+    };
+    checkUsernameUnique();
+  }, [username]);
+
+  const onSubmit = async (data: z.infer<typeof signUpSchema>) => {
+    setIsSubmitting(true);
     try {
-      // Send registration data to the sign-up API endpoint
-      const res = await fetch('/api/sign-up', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password }),
+      const response = await axios.post<ApiResponse>('/api/sign-up', data);
+
+      toast({
+        title: 'Success',
+        description: response.data.message,
       });
 
-      const data = await res.json();
+      router.replace(`/verify/${data.username}`);
 
-      if (!data.success) {
-        // Registration failed → display the error message from API
-        setError(data.message);
-      } else {
-        // Registration successful → redirect to OTP verification page
-        // The username is passed in the URL so the verify page knows who to verify
-        router.replace(`/verify/${username}`);
-      }
-    } catch {
-      // Network or unexpected error
-      setError('Something went wrong');
-    } finally {
-      // Always reset loading state, whether success or failure
-      setLoading(false);
+      setIsSubmitting(false);
+    } catch (error) {
+      console.error('Error during sign-up:', error);
+
+      const axiosError = error as AxiosError<ApiResponse>;
+
+      // Default error message
+      let errorMessage = axiosError.response?.data.message;
+      ('There was a problem with your sign-up. Please try again.');
+
+      toast({
+        title: 'Sign Up Failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
-        <h1 className="mb-6 text-center text-2xl font-bold">Sign Up</h1>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.2),_transparent_50%)]" />
+      <div className="pointer-events-none absolute -left-24 top-20 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 bottom-20 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="johndoe"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-8 shadow-2xl backdrop-blur">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Create your account
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Join True Feedback and start your anonymous adventure
+          </p>
+        </div>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <FormField
+              name="username"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-700">Username</FormLabel>
+                  <Input
+                    {...field}
+                    placeholder="johndoe"
+                    className="h-11 rounded-lg border-slate-300 focus-visible:ring-2 focus-visible:ring-blue-500"
+                    onChange={(e) => {
+                      field.onChange(e);
+                      debouncedUsername(e.target.value);
+                    }}
+                  />
+                  <div className="mt-1 min-h-5">
+                    {isCheckingUsername && (
+                      <p className="flex items-center gap-2 text-xs text-slate-500">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Checking username...
+                      </p>
+                    )}
+                    {!isCheckingUsername && usernameMessage && (
+                      <p
+                        className={`text-xs ${
+                          usernameMessage === 'Username is unique'
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
+                        }`}
+                      >
+                        {usernameMessage}
+                      </p>
+                    )}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            <FormField
+              name="email"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-700">Email</FormLabel>
+                  <Input
+                    {...field}
+                    name="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    className="h-11 rounded-lg border-slate-300 focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-500">
+                    We’ll send a verification code to this email.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={8}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            <FormField
+              name="password"
+              control={form.control}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-700">Password</FormLabel>
+                  <Input
+                    type="password"
+                    {...field}
+                    name="password"
+                    placeholder="••••••••"
+                    className="h-11 rounded-lg border-slate-300 focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {error && (
-            <p className="text-sm text-red-500">{error}</p>
-          )}
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-lg bg-slate-900 font-medium text-white hover:bg-slate-800"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Please wait
+                </>
+              ) : (
+                'Create account'
+              )}
+            </Button>
+          </form>
+        </Form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-blue-600 py-2 text-white transition hover:bg-blue-700 disabled:opacity-50"
+        <div className="mt-6 text-center text-sm text-slate-600">
+          Already a member?{' '}
+          <Link
+            href="/sign-in"
+            className="font-medium text-blue-600 transition hover:text-blue-700 hover:underline"
           >
-            {loading ? 'Signing up...' : 'Sign Up'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <a href="/sign-in" className="text-blue-600 hover:underline">
-            Sign In
-          </a>
-        </p>
+            Sign in
+          </Link>
+        </div>
       </div>
     </div>
   );

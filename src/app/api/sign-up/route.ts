@@ -36,7 +36,6 @@ import bcrypt from "bcryptjs"
 import connectToDB from "@/lib/dbConnect";
 
 import { sendVerificationEmail } from "@/helpers/sendVerficationEmail";
-import { success } from "zod";
 
 export async function POST(request: Request) {
     // Step 1: Establish database connection (singleton — won't reconnect if already connected)
@@ -47,7 +46,7 @@ export async function POST(request: Request) {
 
         // Step 3: Check if a VERIFIED user with this username already exists
         // Only verified users "own" the username — unverified users can be overwritten
-        const existingUserVerfiedByUsername = await UserModel.findOne({ username, isverified: true})
+        const existingUserVerfiedByUsername = await UserModel.findOne({ username, isVerified: true})
 
         if (existingUserVerfiedByUsername) {
             return Response.json(
@@ -120,7 +119,7 @@ export async function POST(request: Request) {
         // Step 9: Send verification email with the OTP code
         // Uses Resend API + React Email template
         //send verification email 
-        const emailResponse = await sendVerificationEmail(email,username,verificationCode)
+        const emailResponse = await sendVerificationEmail(email,verificationCode,username)
 
         // If email sending failed, return error (user is saved but can't verify)
         if(!emailResponse.success){
