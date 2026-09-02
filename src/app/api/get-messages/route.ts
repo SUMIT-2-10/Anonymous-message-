@@ -1,3 +1,16 @@
+/**
+ * ============================================
+ * FILE: src/app/api/get-messages/route.ts
+ * Layer: backend/api
+ * Purpose: Documents the role of this module in the project and how it connects with adjacent modules.
+ * Why It Exists: Keeps concerns separated (UI, API, auth, validation, email, or data-access) for maintainability.
+ * Integration: Imported by related pages/routes/components to participate in the app request and rendering lifecycle.
+ * Route: /api/get-messages
+ * Request Flow: receives request -> validates/parses input -> executes business logic -> returns JSON response.
+ * Error Handling: returns explicit status codes for authentication, validation, and server failures.
+ * ============================================
+ */
+
 // =============================================
 // Route: /api/get-messages
 // Method: GET
@@ -49,7 +62,7 @@ export async function GET(request: Request) {
 
   // Step 2: Get the authenticated session
   const session = await getServerSession(authOptions);
-  const _user: User = session?.user;
+  const _user = session?.user as User ;
 
   // Step 3: Reject if not authenticated
   if (!session || !_user) {

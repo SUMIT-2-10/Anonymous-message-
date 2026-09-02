@@ -1,29 +1,47 @@
-// =============================================
-// File: src/Schemas/messageSchema.ts
-// Purpose: Zod validation schema for anonymous messages
-// =============================================
-//
-// MESSAGE VALIDATION RULES:
-// - content: Must be between 10 and 1000 characters
-//   → Min 10: Prevents meaningless/spam messages like "hi" or "lol"
-//   → Max 1000: Prevents excessively long messages that could:
-//     - Slow down the database (embedded subdocuments add to document size)
-//     - Cause UI overflow issues on the dashboard
-//     - Be used for DoS attacks (filling storage with huge messages)
-//
-// SECURITY RISKS PREVENTED:
-// - Empty/near-empty spam messages
-// - Storage abuse via extremely long messages
-// - MongoDB document size limit (16MB) protection
-// =============================================
+/**
+ * =================================================================================================
+ * FILE: messageSchema.ts
+ * =================================================================================================
+ *
+ * @description Zod schema for validating the content of an anonymous message.
+ *
+ * @layer schemas
+ *
+ * @purpose This schema is used when a user sends a message to another user. It ensures that the
+ *          message content meets certain criteria (e.g., length) before it is stored in the
+ *          database. This helps maintain data quality and prevent abuse.
+ *
+ * @see /src/app/api/send-messages/route.ts where this schema is used to validate the incoming
+ *      message content.
+ * =================================================================================================
+ */
 
-import z from "zod";
+// =================================================================================================
+// IMPORTS
+// =================================================================================================
+import { z } from 'zod';
 
-// This schema is used to validate   
-
+// =================================================================================================
+// SCHEMA
+// =================================================================================================
+/**
+ * @const messageSchema
+ * @description Zod schema for the message content.
+ *
+ * @field content
+ *  - **Type:** `string`
+ *  - **Validation:**
+ *    - `.min(10, ...)`: Sets a minimum length of 10 characters.
+ *      - **Why?** This discourages low-effort or spammy messages (e.g., "hi"), prompting
+ *        senders to provide more meaningful content.
+ *    - `.max(1000, ...)`: Sets a maximum length of 1000 characters.
+ *      - **Why?** This prevents overly long messages that could clutter the UI or be used for
+ *        abuse. It also helps manage the overall size of the parent `User` document, as
+ *        messages are embedded.
+ */
 export const messageSchema = z.object({
-    content: z
-        .string()
-        .min(10, "Content cannot be empty ")    // Reject messages shorter than 10 chars
-        .max(1000, "Content is too long"),       // Reject messages longer than 1000 chars
+  content: z
+    .string()
+    .min(10, 'Content cannot be empty ')
+    .max(1000, 'Content is too long'),
 });

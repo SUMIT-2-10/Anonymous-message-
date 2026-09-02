@@ -1,3 +1,15 @@
+/**
+ * ============================================
+ * FILE: src/app/(auth)/sign-up/page.tsx
+ * Layer: frontend/app
+ * Purpose: Documents the role of this module in the project and how it connects with adjacent modules.
+ * Why It Exists: Keeps concerns separated (UI, API, auth, validation, email, or data-access) for maintainability.
+ * Integration: Imported by related pages/routes/components to participate in the app request and rendering lifecycle.
+ * Routing: this page is served at /(auth)/sign-up using Next.js App Router conventions.
+ * Rendering: determine behavior by directives in this file (for example, 'use client' for client rendering).
+ * ============================================
+ */
+
 'use client';
 
 import { ApiResponse } from '@/types/ApiResponse';

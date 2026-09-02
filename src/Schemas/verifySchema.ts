@@ -1,24 +1,41 @@
-// =============================================
-// File: src/Schemas/verifySchema.ts
-// Purpose: Zod validation schema for email verification (OTP)
-// =============================================
-//
-// VERIFICATION VALIDATION RULES:
-// - email: Must be a valid email format, trimmed
-// - verifycode: Must be EXACTLY 6 characters (matches the 6-digit OTP)
-//   → length(6) ensures users can't submit partial or extended codes
-//   → trim() removes accidental whitespace from copy-paste
-//
-// WHY EXACTLY 6 CHARACTERS?
-// - The OTP is generated as a 6-digit number (100000-999999) in the sign-up route
-// - This validation ensures the submitted code matches the expected format
-// - Prevents brute-force with shorter/longer codes
-// =============================================
+/**
+ * =================================================================================================
+ * FILE: verifySchema.ts
+ * =================================================================================================
+ *
+ * @description Zod schema for validating the email verification code (OTP).
+ *
+ * @layer schemas
+ *
+ * @purpose This schema ensures that the verification code submitted by a user during the email
+ *          verification process is in the correct format before it is processed by the API.
+ *          This prevents invalid or malformed data from reaching the backend logic.
+ *
+ * @see /src/app/api/verify-code/route.ts where this schema is used to validate the request body.
+ * =================================================================================================
+ */
 
-import z from "zod";
+// =================================================================================================
+// IMPORTS
+// =================================================================================================
+import { z } from 'zod';
 
-// This schema is used to validate the user verification data
-
+// =================================================================================================
+// SCHEMA
+// =================================================================================================
+/**
+ * @const verifySchema
+ * @description Zod schema for the verification code.
+ *
+ * @field verifycode
+ *  - **Type:** `string`
+ *  - **Validation:**
+ *    - `.length(6, ...)`: Ensures the code is exactly 6 characters long, matching the length of
+ *      the generated OTP. This is a critical security and data integrity check.
+ *    - `.trim()`: This method is commented out as `length` should be the final check. Zod
+ *      pipelines execute in order, so trimming should happen before length validation if needed,
+ *      but for a fixed-length code, it's often omitted.
+ */
 export const verifySchema = z.object({
-    verifycode: z.string().length(6, "Verification code must be exactly 6 characters long").trim(),
+  verifycode: z.string().length(6, 'Verification code must be exactly 6 characters long').trim(),
 });

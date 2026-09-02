@@ -1,6 +1,6 @@
 /**
  * ============================================
- * FILE: src/components/ui/label.tsx
+ * FILE: src/components/ui/separator.tsx
  * Layer: frontend/components
  * Purpose: Documents the role of this module in the project and how it connects with adjacent modules.
  * Why It Exists: Keeps concerns separated (UI, API, auth, validation, email, or data-access) for maintainability.
@@ -11,19 +11,23 @@
 "use client"
 
 import * as React from "react"
-import { Label as LabelPrimitive } from "radix-ui"
+import { Separator as SeparatorPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
-function Label({
+function Separator({
   className,
+  orientation = "horizontal",
+  decorative = true,
   ...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
+}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
   return (
-    <LabelPrimitive.Root
-      data-slot="label"
+    <SeparatorPrimitive.Root
+      data-slot="separator"
+      decorative={decorative}
+      orientation={orientation}
       className={cn(
-        "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        "shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
         className
       )}
       {...props}
@@ -31,4 +35,4 @@ function Label({
   )
 }
 
-export { Label }
+export { Separator }

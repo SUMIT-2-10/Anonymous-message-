@@ -1,144 +1,156 @@
-// =============================================
-// File: src/model/User.ts
-// Purpose: Mongoose schemas and models for User and Message
-// =============================================
-//
-// ARCHITECTURE: Embedded Subdocuments
-// -----------------------------------
-// Instead of having a separate "Messages" collection, messages are stored
-// INSIDE each User document as an array of subdocuments. This is a common
-// MongoDB pattern when:
-//   - Messages belong to exactly one user
-//   - We always fetch messages alongside the user
-//   - The subdocument array won't grow unboundedly (practical limit ~16MB per document)
-//
-// SCHEMA STRUCTURE:
-// User
-// ├── username        (unique, trimmed)
-// ├── email           (unique, validated with regex)
-// ├── password        (bcrypt-hashed, never stored in plain text)
-// ├── verifycode      (6-digit OTP string for email verification)
-// ├── verifycodeExpire (Date — OTP expires 1 hour after generation)
-// ├── isVerified      (boolean — has the user verified their email?)
-// ├── isAcceptingMessages (boolean — is the user accepting anonymous messages?)
-// └── messages[]      (array of embedded Message subdocuments)
-//     ├── content     (the anonymous message text)
-//     └── createdAt   (timestamp when message was sent)
-//
-// WHY OTP EXPIRY?
-// - OTPs without expiry are a security risk — a leaked or brute-forced code
-//   could be used at any time. The 1-hour window limits the attack surface.
-// - If the OTP expires, the user must sign up again to get a fresh code.
-//
-// HOW MESSAGE STORAGE WORKS:
-// - When someone sends an anonymous message, a new Message subdocument
-//   is pushed into the user's `messages` array via `user.messages.push()`.
-// - Messages are retrieved using MongoDB aggregation pipeline ($unwind + $sort)
-//   to return them sorted by date without modifying the schema.
-// =============================================
+/**
+ * =================================================================================================
+ * FILE: User.ts
+ * =================================================================================================
+ *
+ * @description Mongoose schemas and models for the User and embedded Message documents.
+ *
+ * @layer model
+ *
+ * @purpose This file defines the data structure for users and the messages they receive. It is
+ *          the blueprint for how user-related data is stored in the MongoDB database.
+ *
+ * @architectural_choice Embedded Documents for Messages
+ * - **What it is:** Instead of creating a separate `Message` collection, messages are stored as
+ *   an array of subdocuments directly within the `User` document that owns them.
+ * - **Why this approach?**
+ *   1. **Data Locality:** Messages are always retrieved with their parent user. Embedding them
+ *      avoids the need for a separate database query (a `$lookup` or `populate`), making reads
+ *      faster and simpler.
+ *   2. **Strong Ownership:** A message belongs exclusively to one user. This one-to-many
+ *      relationship, where the "many" side (messages) is accessed through the "one" side (user),
+ *      is a classic use case for embedding.
+ *   3. **Atomic Operations:** Updates to a user and their messages can be performed in a single,
+ *      atomic operation.
+ * - **Considerations:** This pattern is ideal when the embedded array is not expected to grow
+ *   infinitely. MongoDB has a document size limit of 16MB, which is more than enough for this
+ *   application's use case.
+ * =================================================================================================
+ */
 
-import mongoose, { Schema, Document } from "mongoose";
+// =================================================================================================
+// IMPORTS
+// =================================================================================================
+import mongoose, { Schema, Document } from 'mongoose';
 
-// =============================================
-// MESSAGE INTERFACE & SCHEMA
-// =============================================
-// Defines the shape of each anonymous message.
-// Extends Mongoose's Document interface so we get _id, save(), etc.
-
-// Define the Message interface and schema first, since User references it
+// =================================================================================================
+// MESSAGE SCHEMA (SUBDOCUMENT)
+// =================================================================================================
+/**
+ * @interface Message
+ * @description Represents a single anonymous message. It extends `mongoose.Document` to include
+ *              Mongoose-specific properties like `_id`.
+ *
+ * @property {string} content - The text content of the message.
+ * @property {Date} createdAt - The timestamp when the message was created.
+ */
 export interface Message extends Document {
-    content: string;    // The actual anonymous message text
-    createdAt: Date;    // When the message was sent (auto-set to Date.now)
+  content: string;
+  createdAt: Date;
 }
 
+/**
+ * @const MessageSchema
+ * @description The Mongoose schema for the `Message` subdocument.
+ */
 const MessageSchema: Schema<Message> = new Schema({
-    content: {
-        type: String,
-        required: [true, "Message content is required"],
-        // Custom error message shown if content is missing
-
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now,   // Automatically sets to current timestamp when created
-        required: true,
-    }
+  content: {
+    type: String,
+    required: [true, 'Message content is required.'],
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
 });
 
-// =============================================
-// USER INTERFACE & SCHEMA
-// =============================================
-// Defines the main User document shape.
-// Each user can receive anonymous messages and control their acceptance.
-
+// =================================================================================================
+// USER SCHEMA (TOP-LEVEL DOCUMENT)
+// =================================================================================================
+/**
+ * @interface User
+ * @description Represents a user of the application.
+ *
+ * @property {string} username - The user's unique public identifier.
+ * @property {string} email - The user's unique email address, used for login and notifications.
+ * @property {string} password - The user's hashed password.
+ * @property {string} verifycode - A 6-digit code sent for email verification.
+ * @property {Date} verifycodeExpire - The expiration date for the `verifycode`.
+ * @property {boolean} isVerified - Flag indicating if the user has verified their email.
+ * @property {boolean} isAcceptingMessages - Flag allowing the user to enable/disable receiving messages.
+ * @property {Message[]} messages - An array of embedded message subdocuments.
+ */
 export interface User extends Document {
-    username: string;           // Unique display name, used in public message URL
-    email: string;              // Unique email, used for login and OTP verification
-    password: string;           // bcrypt-hashed password (never plain text)
-    verifycode: string;         // 6-digit OTP sent to email during sign-up
-    verifycodeExpire: Date;     // Expiry time for the OTP (1 hour from generation)
-    isVerified: boolean;        // Whether the user has verified their email
-    isAcceptingMessages: boolean; // Toggle: can anonymous users send messages?
-    messages: Message[];        // Array of embedded anonymous messages
+  username: string;
+  email: string;
+  password: string;
+  verifycode: string;
+  verifycodeExpire: Date;
+  isVerified: boolean;
+  isAcceptingMessages: boolean;
+  messages: Message[];
 }
 
+/**
+ * @const UserSchema
+ * @description The Mongoose schema for the `User` document.
+ */
 const UserSchema: Schema<User> = new Schema({
-    username: {
-        type: String,
-        required: [true, "Username is required"],
-        trim: true,      // Removes leading/trailing whitespace
-        unique: true,     // Enforces uniqueness at the database level
-    },
-    email: {
-        type: String,
-        required: [true, "Email is required"],
-        unique: true,     // One account per email
-        match: [/\S+@\S+\.\S+/, "Please use a valid email address"],// This regex checks for a basic email format https://regexr.com/
-        // Basic email regex: must have non-whitespace + @ + non-whitespace + . + non-whitespace
-    },
-    password: {
-        type: String,
-        required: [true, "Password is required"],
-        // NOTE: This stores the bcrypt HASH, not the plain-text password
-        // Hashing is done in the sign-up route before saving
-    },
-    verifycode: {
-        type: String,
-        required: [true, "Verification code is required"],
-        // 6-digit numeric string (e.g., "482917")
-        // Generated in the sign-up route using Math.random()
-    },
-    verifycodeExpire: {
-        type: Date,
-        required: [true, "Verification code expiration date is required"],
-        // Set to current time + 1 hour during sign-up
-        // Used in verify-code route to check if OTP is still valid
-    },
-    isVerified: {
-        type: Boolean,
-        default: false,
-        // Starts as false → set to true after successful OTP verification
-        // Users cannot log in until isVerified === true
-    },
-    isAcceptingMessages: {
-        type: Boolean,
-        default: true,
-        // Controls whether anonymous users can send messages
-        // Toggled via the /api/accept-messages endpoint
-    },
-    messages: [MessageSchema],
-    // Embedded subdocument array — each item follows the MessageSchema
-    // New messages are pushed into this array via the /api/send-messages endpoint
+  username: {
+    type: String,
+    required: [true, 'Username is required.'],
+    trim: true,
+    unique: true,
+  },
+  email: {
+    type: String,
+    required: [true, 'Email is required.'],
+    unique: true,
+    match: [/\S+@\S+\.\S+/, 'Please use a valid email address.'],
+  },
+  password: {
+    type: String,
+    required: [true, 'Password is required.'],
+  },
+  verifycode: {
+    type: String,
+    required: [true, 'Verification code is required.'],
+  },
+  verifycodeExpire: {
+    type: Date,
+    required: [true, 'Verification code expiry date is required.'],
+  },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  isAcceptingMessages: {
+    type: Boolean,
+    default: false,
+  },
+  messages: [MessageSchema],
+});
 
-
-})
-
-// =============================================
+// =================================================================================================
 // MODEL EXPORT
-// =============================================
-// In Next.js, hot-reloading can cause Mongoose to try re-registering the same model.
-// The pattern below checks if the model already exists in mongoose.models before creating it.
-// This prevents the "Cannot overwrite model once compiled" error during development.
+// =================================================================================================
+/**
+ * @const UserModel
+ * @description The Mongoose model for the `User` collection.
+ *
+ * @logic
+ * - **Problem:** In a Next.js development environment with hot-reloading, the code that defines
+ *   a Mongoose model can be executed multiple times. Attempting to redefine an existing model
+ *   (`mongoose.model("User", UserSchema)`) throws a `OverwriteModelError`.
+ * - **Solution:** This code checks if the `User` model has already been compiled and registered
+ *   in `mongoose.models`.
+ *   - If `mongoose.models.User` exists, it reuses the existing model.
+ *   - If it does not exist, it creates a new model using `mongoose.model<User>('User', UserSchema)`.
+ * This ensures that the model is only created once per server instance.
+ */
+const UserModel =
+  (mongoose.models.User as mongoose.Model<User>) ||
+  mongoose.model<User>('User', UserSchema);
 
-const UserModel = (mongoose.models.User as mongoose.Model<User>) || mongoose.model<User>("User", UserSchema);
 export default UserModel;
